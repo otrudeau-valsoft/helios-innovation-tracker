@@ -24,8 +24,61 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Calendar } from '@/components/ui/calendar'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { CalendarIcon, ChevronDown, ChevronUp, ChevronsUpDown, Trash2, Check, X } from 'lucide-react'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { CalendarIcon, ChevronDown, ChevronUp, ChevronsUpDown, Trash2, Check, X, HelpCircle } from 'lucide-react'
 import type { Company, OpportunityWithCompany, OpportunityStatus, IndicatorStatus } from '@/types/database'
+
+// Column descriptions for tooltips
+const COLUMN_DESCRIPTIONS: Record<string, { title: string; description: string }> = {
+  phase: {
+    title: 'Phase',
+    description: 'Current stage in the AI opportunity lifecycle: Phase 0 (Identification), Phase 1 (Discovery), Phase 2 (PoC), Phase 3 (MVP Pilot), Phase 4 (Full Deployment)'
+  },
+  company: {
+    title: 'Company',
+    description: 'The Helios portfolio company associated with this AI opportunity'
+  },
+  name: {
+    title: 'Opportunity',
+    description: 'Name or title of the AI initiative or project'
+  },
+  description: {
+    title: 'Description',
+    description: 'Brief description of the opportunity scope and objectives'
+  },
+  estimated_som: {
+    title: '1-yr SOM',
+    description: 'Estimated 1-year Serviceable Obtainable Market - the projected revenue potential within the first year'
+  },
+  status: {
+    title: 'Status',
+    description: 'Current status: Done (complete), In-Progress (active work), Paused (on hold), Planned (scheduled), Not-Go (rejected)'
+  },
+  messaging: {
+    title: 'Messaging',
+    description: 'Readiness of marketing messaging and value proposition. Green = Ready, Amber = In Progress, Red = Needs Attention'
+  },
+  campaign: {
+    title: 'Campaign',
+    description: 'Marketing campaign readiness and execution status. Green = Ready, Amber = In Progress, Red = Needs Attention'
+  },
+  pricing: {
+    title: 'Pricing',
+    description: 'Pricing strategy and model readiness. Green = Ready, Amber = In Progress, Red = Needs Attention'
+  },
+  sales: {
+    title: 'Sales Alignment',
+    description: 'Sales team readiness and alignment with the opportunity. Green = Ready, Amber = In Progress, Red = Needs Attention'
+  },
+  next_steps: {
+    title: 'Next Steps',
+    description: 'Immediate action items or next milestones for this opportunity'
+  },
+  target_date: {
+    title: 'Target Date',
+    description: 'Target completion or milestone date for the current phase'
+  }
+}
 
 type SortField = 'name' | 'company' | 'estimated_som' | 'status' | 'phase' | 'target_date'
 type SortDirection = 'asc' | 'desc'
@@ -119,25 +172,62 @@ export function TableView({ opportunities, companies, onRefresh }: TableViewProp
     [supabase, onRefresh]
   )
 
-  const SortHeader = ({ field, children, className }: { field: SortField; children: React.ReactNode; className?: string }) => (
-    <TableHead
-      className={cn("cursor-pointer hover:bg-gray-100 select-none", className)}
-      onClick={() => handleSort(field)}
-    >
-      <div className="flex items-center gap-1">
-        {children}
-        {sortField === field ? (
-          sortDirection === 'asc' ? (
-            <ChevronUp className="h-4 w-4" />
+  const SortHeader = ({ field, children, className, tooltipKey }: { field: SortField; children: React.ReactNode; className?: string; tooltipKey?: string }) => {
+    const info = COLUMN_DESCRIPTIONS[tooltipKey || field]
+    return (
+      <TableHead
+        className={cn("cursor-pointer hover:bg-gray-100 select-none", className)}
+        onClick={() => handleSort(field)}
+      >
+        <div className="flex items-center gap-1">
+          {children}
+          {info && (
+            <Tooltip>
+              <TooltipTrigger asChild onClick={(e) => e.stopPropagation()}>
+                <HelpCircle className="h-3.5 w-3.5 text-gray-400 hover:text-gray-600" />
+              </TooltipTrigger>
+              <TooltipContent side="top" className="max-w-xs">
+                <p className="font-medium">{info.title}</p>
+                <p className="text-xs text-gray-500">{info.description}</p>
+              </TooltipContent>
+            </Tooltip>
+          )}
+          {sortField === field ? (
+            sortDirection === 'asc' ? (
+              <ChevronUp className="h-4 w-4" />
+            ) : (
+              <ChevronDown className="h-4 w-4" />
+            )
           ) : (
-            <ChevronDown className="h-4 w-4" />
-          )
-        ) : (
-          <ChevronsUpDown className="h-4 w-4 text-gray-400" />
-        )}
-      </div>
-    </TableHead>
-  )
+            <ChevronsUpDown className="h-4 w-4 text-gray-400" />
+          )}
+        </div>
+      </TableHead>
+    )
+  }
+
+  // Header with tooltip but no sorting
+  const HeaderWithTooltip = ({ children, tooltipKey, className }: { children: React.ReactNode; tooltipKey: string; className?: string }) => {
+    const info = COLUMN_DESCRIPTIONS[tooltipKey]
+    return (
+      <TableHead className={className}>
+        <div className="flex items-center gap-1">
+          {children}
+          {info && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <HelpCircle className="h-3.5 w-3.5 text-gray-400 hover:text-gray-600" />
+              </TooltipTrigger>
+              <TooltipContent side="top" className="max-w-xs">
+                <p className="font-medium">{info.title}</p>
+                <p className="text-xs text-gray-500">{info.description}</p>
+              </TooltipContent>
+            </Tooltip>
+          )}
+        </div>
+      </TableHead>
+    )
+  }
 
   // Get phase info for display
   const getPhaseInfo = (phaseNum: number) => {
@@ -146,25 +236,26 @@ export function TableView({ opportunities, companies, onRefresh }: TableViewProp
   }
 
   return (
-    <div className="rounded-lg overflow-hidden border">
-      <Table>
-        <TableHeader>
-          <TableRow className="bg-gray-50">
-            <SortHeader field="phase" className="w-28">Phase</SortHeader>
-            <SortHeader field="company">Company</SortHeader>
-            <SortHeader field="name">Opportunity</SortHeader>
-            <TableHead>Description</TableHead>
-            <SortHeader field="estimated_som">1-yr SOM</SortHeader>
-            <SortHeader field="status">Status</SortHeader>
-            <TableHead className="text-center">Msg</TableHead>
-            <TableHead className="text-center">Camp</TableHead>
-            <TableHead className="text-center">Price</TableHead>
-            <TableHead className="text-center">Sales</TableHead>
-            <TableHead>Next Steps</TableHead>
-            <SortHeader field="target_date">Target Date</SortHeader>
-            <TableHead className="w-12"></TableHead>
-          </TableRow>
-        </TableHeader>
+    <TooltipProvider delayDuration={300}>
+      <div className="rounded-lg overflow-hidden border">
+        <Table>
+          <TableHeader>
+            <TableRow className="bg-gray-50">
+              <SortHeader field="phase" className="w-28" tooltipKey="phase">Phase</SortHeader>
+              <SortHeader field="company" tooltipKey="company">Company</SortHeader>
+              <SortHeader field="name" tooltipKey="name">Opportunity</SortHeader>
+              <HeaderWithTooltip tooltipKey="description">Description</HeaderWithTooltip>
+              <SortHeader field="estimated_som" tooltipKey="estimated_som">1-yr SOM</SortHeader>
+              <SortHeader field="status" tooltipKey="status">Status</SortHeader>
+              <HeaderWithTooltip tooltipKey="messaging" className="text-center">Msg</HeaderWithTooltip>
+              <HeaderWithTooltip tooltipKey="campaign" className="text-center">Camp</HeaderWithTooltip>
+              <HeaderWithTooltip tooltipKey="pricing" className="text-center">Price</HeaderWithTooltip>
+              <HeaderWithTooltip tooltipKey="sales" className="text-center">Sales</HeaderWithTooltip>
+              <HeaderWithTooltip tooltipKey="next_steps">Next Steps</HeaderWithTooltip>
+              <SortHeader field="target_date" tooltipKey="target_date">Target Date</SortHeader>
+              <TableHead className="w-12"></TableHead>
+            </TableRow>
+          </TableHeader>
         <TableBody>
           {sortedOpportunities.length === 0 ? (
             <TableRow>
@@ -191,6 +282,7 @@ export function TableView({ opportunities, companies, onRefresh }: TableViewProp
         </TableBody>
       </Table>
     </div>
+    </TooltipProvider>
   )
 }
 

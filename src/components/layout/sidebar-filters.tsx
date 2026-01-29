@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 import { useFilterStore } from '@/stores/filter-store'
 import { createClient } from '@/lib/supabase/client'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -17,14 +19,22 @@ import {
   Target,
   Filter,
   ChevronDown,
-  Check
+  Check,
+  LayoutGrid,
+  Table2
 } from 'lucide-react'
 import type { Company, OpportunityWithCompany } from '@/types/database'
+
+const navItems = [
+  { href: '/dashboard/timeline', label: 'Timeline', icon: LayoutGrid },
+  { href: '/dashboard/table', label: 'Table', icon: Table2 },
+]
 
 export function SidebarFilters() {
   const [companies, setCompanies] = useState<Company[]>([])
   const [opportunities, setOpportunities] = useState<OpportunityWithCompany[]>([])
   const supabase = createClient()
+  const pathname = usePathname()
 
   const {
     sidebarCollapsed,
@@ -71,6 +81,31 @@ export function SidebarFilters() {
         >
           <ChevronRight className="h-4 w-4" />
         </Button>
+
+        {/* Page Navigation - Collapsed */}
+        <div className="space-y-1 mb-4">
+          {navItems.map((item) => {
+            const Icon = item.icon
+            const isActive = pathname === item.href
+            return (
+              <Link key={item.href} href={item.href}>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className={cn(
+                    "w-10 h-10",
+                    isActive && "bg-blue-100 text-blue-600"
+                  )}
+                  title={item.label}
+                >
+                  <Icon className="h-5 w-5" />
+                </Button>
+              </Link>
+            )
+          })}
+        </div>
+
+        <Separator className="w-8 mb-4" />
 
         <div className="space-y-3">
           <Button
@@ -137,6 +172,30 @@ export function SidebarFilters() {
           </Button>
         </div>
       </div>
+
+      {/* Page Navigation - Expanded */}
+      <div className="space-y-1 mb-4">
+        {navItems.map((item) => {
+          const Icon = item.icon
+          const isActive = pathname === item.href
+          return (
+            <Link key={item.href} href={item.href}>
+              <Button
+                variant="ghost"
+                className={cn(
+                  "w-full justify-start gap-2",
+                  isActive && "bg-blue-100 text-blue-600 hover:bg-blue-100"
+                )}
+              >
+                <Icon className="h-4 w-4" />
+                {item.label}
+              </Button>
+            </Link>
+          )
+        })}
+      </div>
+
+      <Separator className="mb-4" />
 
       {/* Companies Filter */}
       <div className="space-y-3">
