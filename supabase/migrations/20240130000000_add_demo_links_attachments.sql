@@ -4,7 +4,7 @@ ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS demo_links TEXT[] DEFAULT '{}
 -- Create attachments table for file references
 CREATE TABLE IF NOT EXISTS attachments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  opportunity_id UUID REFERENCES opportunities(id) ON DELETE CASCADE,
+  opportunity_id TEXT REFERENCES opportunities(id) ON DELETE CASCADE,
   file_name TEXT NOT NULL,
   file_path TEXT NOT NULL,
   file_size INTEGER,
