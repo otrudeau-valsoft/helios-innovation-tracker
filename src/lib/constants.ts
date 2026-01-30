@@ -48,7 +48,7 @@ export interface Phase {
 }
 
 export const PHASES: Phase[] = [
-  { number: '0', name: 'Identification & Assessment', shortName: 'I&A', duration: 'Ongoing', bgColor: 'bg-slate-100', headerBgColor: 'bg-slate-500' },
+  { number: '0', name: 'Identification & Assessment', shortName: 'I&A', duration: 'Ongoing', bgColor: 'bg-blue-50', headerBgColor: 'bg-blue-400' },
   { number: '1', name: 'Discovery/PoC Light', shortName: 'Discovery', duration: '1 Week', bgColor: 'bg-sky-100', headerBgColor: 'bg-sky-500' },
   { number: '2', name: 'Proof-of-Concept', shortName: 'PoC', duration: '2-4 Weeks', bgColor: 'bg-violet-100', headerBgColor: 'bg-violet-500' },
   { number: '3', name: 'MVP Pilot', shortName: 'MVP', duration: '4-6 Weeks', bgColor: 'bg-amber-100', headerBgColor: 'bg-amber-500' },
