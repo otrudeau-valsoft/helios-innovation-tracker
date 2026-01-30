@@ -65,7 +65,7 @@ export function OpportunityDetailModal({
 
   const handleDeleteAttachment = async (attachmentId: string, filePath: string) => {
     // Delete from storage
-    await supabase.storage.from('attachments').remove([filePath])
+    await supabase.storage.from('Attachments').remove([filePath])
     // Delete from database
     await supabase.from('attachments').delete().eq('id', attachmentId)
     // Refresh list
@@ -213,7 +213,7 @@ export function OpportunityDetailModal({
               <div className="grid grid-cols-2 gap-3">
                 {attachments.map(att => {
                   const isImage = att.file_type?.startsWith('image/')
-                  const publicUrl = supabase.storage.from('attachments').getPublicUrl(att.file_path).data.publicUrl
+                  const publicUrl = supabase.storage.from('Attachments').getPublicUrl(att.file_path).data.publicUrl
 
                   return (
                     <div

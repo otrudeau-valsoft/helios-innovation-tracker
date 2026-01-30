@@ -146,7 +146,7 @@ export function OpportunityModal({
       const filePath = `${opportunity.id}/${Date.now()}.${fileExt}`
 
       const { error: uploadError } = await supabase.storage
-        .from('attachments')
+        .from('Attachments')
         .upload(filePath, file)
 
       if (uploadError) {
@@ -180,7 +180,7 @@ export function OpportunityModal({
   }
 
   const handleDeleteAttachment = async (attachment: Attachment) => {
-    await supabase.storage.from('attachments').remove([attachment.file_path])
+    await supabase.storage.from('Attachments').remove([attachment.file_path])
     await supabase.from('attachments').delete().eq('id', attachment.id)
     setAttachments(attachments.filter(a => a.id !== attachment.id))
   }
