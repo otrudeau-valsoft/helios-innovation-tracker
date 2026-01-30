@@ -28,6 +28,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { CalendarIcon, ChevronDown, ChevronUp, ChevronsUpDown, Trash2, Check, X, HelpCircle, Link as LinkIcon, Paperclip, ChevronRight, FileText, GripVertical, Plus, ExternalLink, Pencil, Download } from 'lucide-react'
 import type { Company, OpportunityWithCompany, OpportunityStatus, IndicatorStatus } from '@/types/database'
+import { parseDemoLink, serializeDemoLink, getDemoLinkDisplay } from '@/types/database'
 
 // Column descriptions for tooltips
 const COLUMN_DESCRIPTIONS: Record<string, { title: string; description: string }> = {
@@ -672,7 +673,7 @@ function OpportunityRow({
           )}
         </TableCell>
 
-        {/* Demo Links - Clickable */}
+        {/* Demo Links - Clickable with labels */}
         <TableCell className="text-center px-0 py-0.5" style={{ width: w('demo'), maxWidth: w('demo') }}>
           <Popover>
             <PopoverTrigger asChild>
@@ -687,7 +688,7 @@ function OpportunityRow({
                 {demoLinksCount > 0 && <span className="ml-0.5">{demoLinksCount}</span>}
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-64 p-2" side="bottom" align="center">
+            <PopoverContent className="w-72 p-2" side="bottom" align="center">
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="font-medium text-xs">Demos</span>
@@ -696,9 +697,11 @@ function OpportunityRow({
                     size="sm"
                     className="h-6 text-xs"
                     onClick={() => {
-                      const newLink = prompt('Enter demo link URL:')
-                      if (newLink) {
+                      const url = prompt('Enter demo URL:')
+                      if (url) {
+                        const label = prompt('Enter display name (optional):') || ''
                         const currentLinks = opportunity.demo_links || []
+                        const newLink = serializeDemoLink({ label, url })
                         updateField(opportunity.id, 'demo_links', [...currentLinks, newLink])
                       }
                     }}
@@ -708,41 +711,62 @@ function OpportunityRow({
                   </Button>
                 </div>
                 {demoLinksCount > 0 ? (
-                  <div className="space-y-1 max-h-32 overflow-y-auto">
-                    {opportunity.demo_links?.map((link, i) => (
-                      <div key={i} className="flex items-center gap-1 group">
-                        <a
-                          href={link}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-[10px] text-blue-600 hover:underline flex-1 truncate flex items-center gap-1"
-                        >
-                          <ExternalLink className="h-2.5 w-2.5 flex-shrink-0" />
-                          {link}
-                        </a>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-4 w-4 opacity-0 group-hover:opacity-100 text-red-500"
-                          onClick={() => {
-                            const newLinks = opportunity.demo_links?.filter((_, idx) => idx !== i) || []
-                            updateField(opportunity.id, 'demo_links', newLinks)
-                          }}
-                        >
-                          <X className="h-2.5 w-2.5" />
-                        </Button>
-                      </div>
-                    ))}
+                  <div className="space-y-1.5 max-h-40 overflow-y-auto">
+                    {opportunity.demo_links?.map((linkStr, i) => {
+                      const link = parseDemoLink(linkStr)
+                      return (
+                        <div key={i} className="flex items-center gap-1 group p-1 rounded hover:bg-gray-50">
+                          <a
+                            href={link.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[10px] text-blue-600 hover:underline flex-1 truncate flex items-center gap-1"
+                            title={link.url}
+                          >
+                            <ExternalLink className="h-2.5 w-2.5 flex-shrink-0" />
+                            {getDemoLinkDisplay(link)}
+                          </a>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-4 w-4 opacity-0 group-hover:opacity-100 text-gray-400 hover:text-blue-600"
+                            title="Rename"
+                            onClick={() => {
+                              const newLabel = prompt('Enter new display name:', link.label || '')
+                              if (newLabel !== null) {
+                                const newLinks = [...(opportunity.demo_links || [])]
+                                newLinks[i] = serializeDemoLink({ label: newLabel, url: link.url })
+                                updateField(opportunity.id, 'demo_links', newLinks)
+                              }
+                            }}
+                          >
+                            <Pencil className="h-2.5 w-2.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-4 w-4 opacity-0 group-hover:opacity-100 text-red-500"
+                            title="Delete"
+                            onClick={() => {
+                              const newLinks = opportunity.demo_links?.filter((_, idx) => idx !== i) || []
+                              updateField(opportunity.id, 'demo_links', newLinks)
+                            }}
+                          >
+                            <X className="h-2.5 w-2.5" />
+                          </Button>
+                        </div>
+                      )
+                    })}
                   </div>
                 ) : (
-                  <p className="text-[10px] text-gray-400 text-center py-2">No demo links yet</p>
+                  <p className="text-[10px] text-gray-400 text-center py-2">No demos yet</p>
                 )}
               </div>
             </PopoverContent>
           </Popover>
         </TableCell>
 
-        {/* Attachments - Clickable with image preview */}
+        {/* Attachments - Clickable with image preview and rename */}
         <TableCell className="text-center px-0 py-0.5" style={{ width: w('files'), maxWidth: w('files') }}>
           <Popover>
             <PopoverTrigger asChild>
@@ -789,10 +813,27 @@ function OpportunityRow({
                                 isImage && "cursor-pointer hover:text-blue-600"
                               )}
                               onClick={() => isImage && onPreviewImage(publicUrl)}
+                              title={att.file_name}
                             >
                               {att.file_name}
                             </span>
                           </div>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-4 w-4 opacity-0 group-hover:opacity-100 text-gray-400 hover:text-blue-600"
+                            title="Rename"
+                            onClick={async () => {
+                              const newName = prompt('Enter new file name:', att.file_name)
+                              if (newName && newName !== att.file_name) {
+                                await supabase.from('attachments').update({ file_name: newName }).eq('id', att.id)
+                                // Trigger a refresh
+                                updateField(opportunity.id, 'updated_at', new Date().toISOString())
+                              }
+                            }}
+                          >
+                            <Pencil className="h-2.5 w-2.5" />
+                          </Button>
                           <a
                             href={publicUrl}
                             download={att.file_name}

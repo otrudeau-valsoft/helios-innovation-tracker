@@ -184,3 +184,44 @@ export interface OpportunityWithCompany extends Opportunity {
 
 export type Attachment = Database['public']['Tables']['attachments']['Row']
 export type AttachmentInsert = Database['public']['Tables']['attachments']['Insert']
+
+// Demo link with optional label - stored as "label|url" or just "url"
+export interface DemoLink {
+  label: string
+  url: string
+}
+
+// Parse a demo link string into label and url
+export function parseDemoLink(link: string): DemoLink {
+  const pipeIndex = link.indexOf('|')
+  if (pipeIndex > 0 && pipeIndex < link.length - 1) {
+    return {
+      label: link.substring(0, pipeIndex),
+      url: link.substring(pipeIndex + 1)
+    }
+  }
+  // No label, use URL as label (show domain or full URL)
+  return { label: '', url: link }
+}
+
+// Serialize a demo link back to string
+export function serializeDemoLink(link: DemoLink): string {
+  if (link.label && link.label.trim()) {
+    return `${link.label}|${link.url}`
+  }
+  return link.url
+}
+
+// Get display text for a demo link
+export function getDemoLinkDisplay(link: DemoLink): string {
+  if (link.label && link.label.trim()) {
+    return link.label
+  }
+  // Extract domain from URL for display
+  try {
+    const url = new URL(link.url)
+    return url.hostname.replace('www.', '')
+  } catch {
+    return link.url
+  }
+}

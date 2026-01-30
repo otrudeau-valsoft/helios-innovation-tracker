@@ -24,10 +24,11 @@ import {
 } from '@/components/ui/select'
 import { Calendar } from '@/components/ui/calendar'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { CalendarIcon, Trash2, Plus, X, Link as LinkIcon, Paperclip, ZoomIn } from 'lucide-react'
+import { CalendarIcon, Trash2, Plus, X, Link as LinkIcon, Paperclip, ZoomIn, Pencil, ExternalLink } from 'lucide-react'
 import { FileUpload } from '@/components/ui/file-upload'
 import { Separator } from '@/components/ui/separator'
-import type { Attachment } from '@/types/database'
+import type { Attachment, DemoLink } from '@/types/database'
+import { parseDemoLink, serializeDemoLink, getDemoLinkDisplay } from '@/types/database'
 import { cn } from '@/lib/utils'
 import type { Company, OpportunityWithCompany, OpportunityStatus, IndicatorStatus, PhaseNumber } from '@/types/database'
 
@@ -130,6 +131,7 @@ export function OpportunityModal({
       if (!url.startsWith('http://') && !url.startsWith('https://')) {
         url = 'https://' + url
       }
+      // Store as plain URL initially (user can add label later)
       setDemoLinks([...demoLinks, url])
       setNewLink('')
     }
@@ -137,6 +139,16 @@ export function OpportunityModal({
 
   const handleRemoveLink = (index: number) => {
     setDemoLinks(demoLinks.filter((_, i) => i !== index))
+  }
+
+  const handleRenameLink = (index: number) => {
+    const currentLink = parseDemoLink(demoLinks[index])
+    const newLabel = prompt('Enter display name for this link:', currentLink.label || '')
+    if (newLabel !== null) {
+      const newLinks = [...demoLinks]
+      newLinks[index] = serializeDemoLink({ label: newLabel, url: currentLink.url })
+      setDemoLinks(newLinks)
+    }
   }
 
   const handleFileUpload = async (file: File) => {
@@ -442,23 +454,40 @@ export function OpportunityModal({
               Demos
             </Label>
             <div className="col-span-3 space-y-2">
-              {demoLinks.map((link, idx) => (
-                <div key={idx} className="flex items-center gap-2">
-                  <Input
-                    value={link}
-                    readOnly
-                    className="flex-1 text-sm text-blue-600"
-                  />
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8"
-                    onClick={() => handleRemoveLink(idx)}
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                </div>
-              ))}
+              {demoLinks.map((linkStr, idx) => {
+                const link = parseDemoLink(linkStr)
+                return (
+                  <div key={idx} className="flex items-center gap-2 p-2 border rounded-md bg-gray-50 group">
+                    <ExternalLink className="h-4 w-4 text-blue-500 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium text-gray-700 truncate">
+                        {getDemoLinkDisplay(link)}
+                      </div>
+                      <div className="text-xs text-gray-400 truncate" title={link.url}>
+                        {link.url}
+                      </div>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 opacity-0 group-hover:opacity-100"
+                      onClick={() => handleRenameLink(idx)}
+                      title="Rename"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-red-500 opacity-0 group-hover:opacity-100"
+                      onClick={() => handleRemoveLink(idx)}
+                      title="Remove"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )
+              })}
               <div className="flex items-center gap-2">
                 <Input
                   value={newLink}
@@ -528,6 +557,7 @@ export function OpportunityModal({
                                 isImage && "cursor-pointer hover:text-blue-600"
                               )}
                               onClick={() => isImage && setPreviewImage(publicUrl)}
+                              title={att.file_name}
                             >
                               {att.file_name}
                             </span>
@@ -536,7 +566,23 @@ export function OpportunityModal({
                           <Button
                             variant="ghost"
                             size="icon"
+                            className="h-6 w-6 text-gray-400 hover:text-blue-600 opacity-0 group-hover:opacity-100"
+                            title="Rename"
+                            onClick={async () => {
+                              const newName = prompt('Enter new file name:', att.file_name)
+                              if (newName && newName !== att.file_name) {
+                                await supabase.from('attachments').update({ file_name: newName }).eq('id', att.id)
+                                fetchAttachments(opportunity!.id)
+                              }
+                            }}
+                          >
+                            <Pencil className="h-3 w-3" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
                             className="h-6 w-6 text-gray-400 hover:text-red-600"
+                            title="Delete"
                             onClick={() => handleDeleteAttachment(att)}
                           >
                             <X className="h-3 w-3" />
