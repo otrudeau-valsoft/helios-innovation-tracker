@@ -28,10 +28,10 @@ export function useOpportunities() {
       if (companiesError) throw companiesError
       setCompanies(companiesData || [])
 
-      // Build opportunities query - join with companies table
+      // Build opportunities query - join with companies and attachments tables
       let query = supabase
         .from('opportunities')
-        .select('*, companies(*)')
+        .select('*, companies(*), attachments(*)')
         .order('phase')
         .order('sort_order')
 

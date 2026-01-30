@@ -1,10 +1,11 @@
 'use client'
 
-import { useState, useCallback, useOptimistic, useTransition } from 'react'
+import { useState, useCallback, useOptimistic, useTransition, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { PHASES, STATUS_CONFIG, INDICATOR_CONFIG } from '@/lib/constants'
 import { format } from 'date-fns'
 import { cn } from '@/lib/utils'
+import { useFilterStore, DEFAULT_COLUMN_WIDTHS } from '@/stores/filter-store'
 import {
   Table,
   TableBody,
@@ -25,7 +26,7 @@ import { Button } from '@/components/ui/button'
 import { Calendar } from '@/components/ui/calendar'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { CalendarIcon, ChevronDown, ChevronUp, ChevronsUpDown, Trash2, Check, X, HelpCircle, Link as LinkIcon, Paperclip } from 'lucide-react'
+import { CalendarIcon, ChevronDown, ChevronUp, ChevronsUpDown, Trash2, Check, X, HelpCircle, Link as LinkIcon, Paperclip, ChevronRight, FileText, GripVertical } from 'lucide-react'
 import type { Company, OpportunityWithCompany, OpportunityStatus, IndicatorStatus } from '@/types/database'
 
 // Column descriptions for tooltips
@@ -102,7 +103,10 @@ export function TableView({ opportunities, companies, onRefresh }: TableViewProp
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editingField, setEditingField] = useState<string | null>(null)
+  const [expandedRowId, setExpandedRowId] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
+  const { columnWidths, setColumnWidth, resetColumnWidths } = useFilterStore()
+  const resizingRef = useRef<{ column: string; startX: number; startWidth: number } | null>(null)
 
   // Optimistic state for opportunities
   const [optimisticOpportunities, setOptimisticOpportunities] = useOptimistic(
@@ -243,31 +247,121 @@ export function TableView({ opportunities, companies, onRefresh }: TableViewProp
     return phase || PHASES[0]
   }
 
+  // Column resize handlers
+  const handleMouseDown = (column: string, e: React.MouseEvent) => {
+    e.preventDefault()
+    resizingRef.current = {
+      column,
+      startX: e.clientX,
+      startWidth: columnWidths[column] || DEFAULT_COLUMN_WIDTHS[column] || 100,
+    }
+    document.addEventListener('mousemove', handleMouseMove)
+    document.addEventListener('mouseup', handleMouseUp)
+  }
+
+  const handleMouseMove = (e: MouseEvent) => {
+    if (!resizingRef.current) return
+    const delta = e.clientX - resizingRef.current.startX
+    const newWidth = Math.max(30, resizingRef.current.startWidth + delta)
+    setColumnWidth(resizingRef.current.column, newWidth)
+  }
+
+  const handleMouseUp = () => {
+    resizingRef.current = null
+    document.removeEventListener('mousemove', handleMouseMove)
+    document.removeEventListener('mouseup', handleMouseUp)
+  }
+
+  // Resizable header component
+  const ResizableHeader = ({
+    column,
+    children,
+    className,
+    sortable = false,
+    field,
+    tooltipKey
+  }: {
+    column: string
+    children: React.ReactNode
+    className?: string
+    sortable?: boolean
+    field?: SortField
+    tooltipKey?: string
+  }) => {
+    const width = columnWidths[column] || DEFAULT_COLUMN_WIDTHS[column] || 100
+    const info = COLUMN_DESCRIPTIONS[tooltipKey || column]
+
+    return (
+      <TableHead
+        className={cn(
+          "relative select-none group",
+          sortable && "cursor-pointer hover:bg-gray-100",
+          className
+        )}
+        style={{ width: `${width}px`, minWidth: `${width}px`, maxWidth: `${width}px` }}
+        onClick={sortable && field ? () => handleSort(field) : undefined}
+      >
+        <div className="flex items-center gap-0.5 pr-2">
+          {children}
+          {info && (
+            <Tooltip>
+              <TooltipTrigger asChild onClick={(e) => e.stopPropagation()}>
+                <HelpCircle className="h-3 w-3 text-gray-400 hover:text-gray-600 flex-shrink-0" />
+              </TooltipTrigger>
+              <TooltipContent side="top" className="max-w-xs">
+                <p className="font-medium">{info.title}</p>
+                <p className="text-xs text-gray-500">{info.description}</p>
+              </TooltipContent>
+            </Tooltip>
+          )}
+          {sortable && field && (
+            sortField === field ? (
+              sortDirection === 'asc' ? (
+                <ChevronUp className="h-3 w-3 flex-shrink-0" />
+              ) : (
+                <ChevronDown className="h-3 w-3 flex-shrink-0" />
+              )
+            ) : (
+              <ChevronsUpDown className="h-3 w-3 text-gray-400 flex-shrink-0" />
+            )
+          )}
+        </div>
+        <div
+          className="absolute right-0 top-0 h-full w-1 cursor-col-resize bg-transparent hover:bg-blue-400 opacity-0 group-hover:opacity-100 transition-opacity"
+          onMouseDown={(e) => handleMouseDown(column, e)}
+          onClick={(e) => e.stopPropagation()}
+        />
+      </TableHead>
+    )
+  }
+
   return (
     <TooltipProvider delayDuration={300}>
       <div className="rounded-lg overflow-hidden border text-xs">
-        <Table>
+        <Table className="table-fixed">
           <TableHeader>
             <TableRow className="bg-gray-50">
-              <SortHeader field="phase" className="w-20 px-2" tooltipKey="phase">Phase</SortHeader>
-              <SortHeader field="company" className="px-2" tooltipKey="company">Company</SortHeader>
-              <SortHeader field="name" className="px-2" tooltipKey="name">Opportunity</SortHeader>
-              <SortHeader field="estimated_som" className="px-2 w-20" tooltipKey="estimated_som">SOM</SortHeader>
-              <SortHeader field="status" className="px-2 w-24" tooltipKey="status">Status</SortHeader>
-              <HeaderWithTooltip tooltipKey="messaging" className="text-center px-1 w-10">M</HeaderWithTooltip>
-              <HeaderWithTooltip tooltipKey="campaign" className="text-center px-1 w-10">C</HeaderWithTooltip>
-              <HeaderWithTooltip tooltipKey="pricing" className="text-center px-1 w-10">P</HeaderWithTooltip>
-              <HeaderWithTooltip tooltipKey="sales" className="text-center px-1 w-10">S</HeaderWithTooltip>
-              <HeaderWithTooltip tooltipKey="demo_links" className="text-center px-1 w-10">Demo</HeaderWithTooltip>
-              <HeaderWithTooltip tooltipKey="attachments" className="text-center px-1 w-10">Files</HeaderWithTooltip>
-              <SortHeader field="target_date" className="px-2 w-24" tooltipKey="target_date">Target</SortHeader>
-              <TableHead className="w-8 px-1"></TableHead>
+              <TableHead className="w-[24px] px-0.5"></TableHead>
+              <ResizableHeader column="phase" sortable field="phase" tooltipKey="phase" className="px-1">Phase</ResizableHeader>
+              <ResizableHeader column="company" sortable field="company" tooltipKey="company" className="px-1">Company</ResizableHeader>
+              <ResizableHeader column="name" sortable field="name" tooltipKey="name" className="px-1">Opportunity</ResizableHeader>
+              <ResizableHeader column="som" sortable field="estimated_som" tooltipKey="estimated_som" className="px-1">SOM</ResizableHeader>
+              <ResizableHeader column="status" sortable field="status" tooltipKey="status" className="px-1">Status</ResizableHeader>
+              <ResizableHeader column="m" tooltipKey="messaging" className="text-center px-0">M</ResizableHeader>
+              <ResizableHeader column="c" tooltipKey="campaign" className="text-center px-0">C</ResizableHeader>
+              <ResizableHeader column="p" tooltipKey="pricing" className="text-center px-0">P</ResizableHeader>
+              <ResizableHeader column="s" tooltipKey="sales" className="text-center px-0">S</ResizableHeader>
+              <ResizableHeader column="nextSteps" tooltipKey="next_steps" className="px-1">Next Steps</ResizableHeader>
+              <ResizableHeader column="demo" tooltipKey="demo_links" className="text-center px-0">Demo</ResizableHeader>
+              <ResizableHeader column="files" tooltipKey="attachments" className="text-center px-0">Files</ResizableHeader>
+              <ResizableHeader column="target" sortable field="target_date" tooltipKey="target_date" className="px-1">Target</ResizableHeader>
+              <TableHead className="w-[28px] px-0"></TableHead>
             </TableRow>
           </TableHeader>
         <TableBody>
           {sortedOpportunities.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={13} className="text-center text-gray-500 py-8">
+              <TableCell colSpan={15} className="text-center text-gray-500 py-8">
                 No opportunities found
               </TableCell>
             </TableRow>
@@ -284,6 +378,9 @@ export function TableView({ opportunities, companies, onRefresh }: TableViewProp
                 updateField={updateField}
                 deleteOpportunity={deleteOpportunity}
                 getPhaseInfo={getPhaseInfo}
+                isExpanded={expandedRowId === opp.id}
+                onToggleExpand={() => setExpandedRowId(expandedRowId === opp.id ? null : opp.id)}
+                columnWidths={columnWidths}
               />
             ))
           )}
@@ -304,6 +401,9 @@ interface OpportunityRowProps {
   updateField: (id: string, field: string, value: unknown) => void
   deleteOpportunity: (id: string) => void
   getPhaseInfo: (phaseNum: number) => { number: string; name: string; shortName: string; headerBgColor: string }
+  isExpanded: boolean
+  onToggleExpand: () => void
+  columnWidths: Record<string, number>
 }
 
 function OpportunityRow({
@@ -316,6 +416,9 @@ function OpportunityRow({
   updateField,
   deleteOpportunity,
   getPhaseInfo,
+  isExpanded,
+  onToggleExpand,
+  columnWidths,
 }: OpportunityRowProps) {
   const isEditing = editingId === opportunity.id
   const [tempValue, setTempValue] = useState<string>('')
@@ -348,240 +451,346 @@ function OpportunityRow({
   const demoLinksCount = opportunity.demo_links?.length || 0
   const attachmentsCount = opportunity.attachments?.length || 0
 
+  const hasExpandableContent = opportunity.description || opportunity.next_steps
+
+  // Get width for a column
+  const w = (col: string) => columnWidths[col] || DEFAULT_COLUMN_WIDTHS[col] || 100
+
   return (
-    <TableRow className="hover:bg-gray-50 h-10">
-      {/* Phase */}
-      <TableCell className="px-2 py-1">
-        <Select
-          value={String(opportunity.phase ?? 0)}
-          onValueChange={(value) => updateField(opportunity.id, 'phase', parseInt(value))}
-        >
-          <SelectTrigger className="h-6 w-full border hover:border-gray-400 cursor-pointer text-xs">
-            <span className={cn(
-              'px-1.5 py-0.5 rounded text-[10px] font-medium text-white',
-              phaseInfo.headerBgColor
-            )}>
-              {phaseInfo.shortName}
-            </span>
-          </SelectTrigger>
-          <SelectContent position="popper" sideOffset={4}>
-            {PHASES.map((p) => (
-              <SelectItem key={p.number} value={p.number}>
-                <div className="flex items-center gap-2">
-                  <span className={cn('w-2 h-2 rounded-full', p.headerBgColor)} />
-                  <span className="text-xs">{p.shortName}</span>
-                </div>
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </TableCell>
-
-      {/* Company */}
-      <TableCell className="px-2 py-1">
-        <Select
-          value={opportunity.company_id || ''}
-          onValueChange={(value) => {
-            const selectedCompany = companies.find(c => c.id === value)
-            updateField(opportunity.id, 'company_id', value)
-            if (selectedCompany) {
-              updateField(opportunity.id, 'company', selectedCompany.name)
-            }
-          }}
-        >
-          <SelectTrigger className="w-full h-6 hover:border-gray-400 cursor-pointer text-xs">
-            <SelectValue placeholder={companyName || 'Select'} />
-          </SelectTrigger>
-          <SelectContent position="popper" sideOffset={4}>
-            {companies.map((c) => (
-              <SelectItem key={c.id} value={c.id} className="text-xs">
-                {c.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </TableCell>
-
-      {/* Name */}
-      <TableCell className="px-2 py-1">
-        {isEditing && editingField === 'name' ? (
-          <div className="flex items-center gap-1">
-            <Input
-              value={tempValue}
-              onChange={(e) => setTempValue(e.target.value)}
-              className="h-6 text-xs"
-              autoFocus
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') saveEditing()
-                if (e.key === 'Escape') cancelEditing()
-              }}
-            />
-            <Button size="icon" variant="ghost" className="h-5 w-5" onClick={saveEditing}>
-              <Check className="h-3 w-3" />
+    <>
+      <TableRow className={cn("hover:bg-gray-50 h-8", isExpanded && "bg-blue-50")}>
+        {/* Expand button */}
+        <TableCell className="px-0 py-0.5" style={{ width: 24 }}>
+          {hasExpandableContent ? (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-5 w-5"
+              onClick={onToggleExpand}
+            >
+              <ChevronRight className={cn("h-3 w-3 transition-transform", isExpanded && "rotate-90")} />
             </Button>
-            <Button size="icon" variant="ghost" className="h-5 w-5" onClick={cancelEditing}>
-              <X className="h-3 w-3" />
-            </Button>
-          </div>
-        ) : (
-          <span
-            className="cursor-pointer hover:text-blue-600 font-medium text-xs truncate block max-w-[150px]"
-            onClick={() => startEditing('name', opportunity.name)}
-            title={opportunity.name}
+          ) : (
+            <span className="w-5 h-5 block" />
+          )}
+        </TableCell>
+
+        {/* Phase */}
+        <TableCell className="px-1 py-0.5 overflow-hidden" style={{ width: w('phase'), maxWidth: w('phase') }}>
+          <Select
+            value={String(opportunity.phase ?? 0)}
+            onValueChange={(value) => updateField(opportunity.id, 'phase', parseInt(value))}
           >
-            {opportunity.name}
-          </span>
-        )}
-      </TableCell>
-
-      {/* SOM */}
-      <TableCell className="px-2 py-1">
-        {isEditing && editingField === 'estimated_som' ? (
-          <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-            <Input
-              type="number"
-              value={tempValue}
-              onChange={(e) => setTempValue(e.target.value)}
-              className="h-6 w-16 text-xs"
-              autoFocus
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') saveEditing()
-                if (e.key === 'Escape') cancelEditing()
-              }}
-            />
-            <Button size="icon" variant="ghost" className="h-5 w-5" onClick={saveEditing}>
-              <Check className="h-3 w-3" />
-            </Button>
-          </div>
-        ) : (
-          <span
-            className="cursor-pointer hover:text-blue-600 text-xs"
-            onClick={() => startEditing('estimated_som', opportunity.estimated_som?.toString() || '')}
-          >
-            {opportunity.estimated_som
-              ? `$${(opportunity.estimated_som / 1000).toFixed(0)}k`
-              : '-'}
-          </span>
-        )}
-      </TableCell>
-
-      {/* Status */}
-      <TableCell className="px-2 py-1">
-        <StatusSelect
-          value={opportunity.status}
-          onChange={(value) => updateField(opportunity.id, 'status', value)}
-        />
-      </TableCell>
-
-      {/* Indicators */}
-      <IndicatorCell
-        value={opportunity.messaging_indicator || 'red'}
-        onChange={(value) => updateField(opportunity.id, 'messaging_indicator', value)}
-      />
-      <IndicatorCell
-        value={opportunity.campaign_indicator || 'red'}
-        onChange={(value) => updateField(opportunity.id, 'campaign_indicator', value)}
-      />
-      <IndicatorCell
-        value={opportunity.pricing_indicator || 'red'}
-        onChange={(value) => updateField(opportunity.id, 'pricing_indicator', value)}
-      />
-      <IndicatorCell
-        value={opportunity.sales_alignment_indicator || 'red'}
-        onChange={(value) => updateField(opportunity.id, 'sales_alignment_indicator', value)}
-      />
-
-      {/* Demo Links */}
-      <TableCell className="text-center px-1 py-1">
-        {demoLinksCount > 0 ? (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <div className="flex items-center justify-center gap-0.5 text-blue-500">
-                <LinkIcon className="h-3 w-3" />
-                <span className="text-[10px]">{demoLinksCount}</span>
-              </div>
-            </TooltipTrigger>
-            <TooltipContent side="top" className="max-w-xs">
-              <p className="font-medium text-xs">Demo Links</p>
-              {opportunity.demo_links?.map((link, i) => (
-                <p key={i} className="text-[10px] text-gray-500 truncate">{link}</p>
+            <SelectTrigger className="h-6 w-full border-0 bg-transparent hover:bg-gray-100 cursor-pointer text-[10px] px-0.5 gap-0">
+              <span className={cn(
+                'px-1.5 py-0.5 rounded text-[9px] font-medium text-white whitespace-nowrap',
+                phaseInfo.headerBgColor
+              )}>
+                {phaseInfo.shortName}
+              </span>
+            </SelectTrigger>
+            <SelectContent position="popper" sideOffset={4}>
+              {PHASES.map((p) => (
+                <SelectItem key={p.number} value={p.number}>
+                  <div className="flex items-center gap-2">
+                    <span className={cn('w-2 h-2 rounded-full', p.headerBgColor)} />
+                    <span className="text-xs">{p.shortName}</span>
+                  </div>
+                </SelectItem>
               ))}
-            </TooltipContent>
-          </Tooltip>
-        ) : (
-          <span className="text-gray-300">-</span>
-        )}
-      </TableCell>
+            </SelectContent>
+          </Select>
+        </TableCell>
 
-      {/* Attachments */}
-      <TableCell className="text-center px-1 py-1">
-        {attachmentsCount > 0 ? (
-          <div className="flex items-center justify-center gap-0.5 text-blue-500">
-            <Paperclip className="h-3 w-3" />
-            <span className="text-[10px]">{attachmentsCount}</span>
-          </div>
-        ) : (
-          <span className="text-gray-300">-</span>
-        )}
-      </TableCell>
-
-      {/* Target Date */}
-      <TableCell className="px-2 py-1">
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button variant="ghost" className="h-6 px-1 text-[10px]">
-              {opportunity.target_date
-                ? format(new Date(opportunity.target_date), 'MMM d')
-                : '-'}
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-auto p-0">
-            <Calendar
-              mode="single"
-              selected={opportunity.target_date ? new Date(opportunity.target_date) : undefined}
-              onSelect={(date) =>
-                updateField(
-                  opportunity.id,
-                  'target_date',
-                  date ? format(date, 'yyyy-MM-dd') : null
-                )
+        {/* Company */}
+        <TableCell className="px-1 py-0.5 overflow-hidden" style={{ width: w('company'), maxWidth: w('company') }}>
+          <Select
+            value={opportunity.company_id || ''}
+            onValueChange={(value) => {
+              const selectedCompany = companies.find(c => c.id === value)
+              updateField(opportunity.id, 'company_id', value)
+              if (selectedCompany) {
+                updateField(opportunity.id, 'company', selectedCompany.name)
               }
-              initialFocus
-            />
-          </PopoverContent>
-        </Popover>
-      </TableCell>
+            }}
+          >
+            <SelectTrigger className="w-full h-6 border-0 bg-transparent hover:bg-gray-100 cursor-pointer text-[10px] px-0.5 gap-0">
+              <span className="truncate text-[10px]">{companyName || 'Select'}</span>
+            </SelectTrigger>
+            <SelectContent position="popper" sideOffset={4}>
+              {companies.map((c) => (
+                <SelectItem key={c.id} value={c.id} className="text-xs">
+                  {c.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </TableCell>
 
-      {/* Delete */}
-      <TableCell className="px-1 py-1">
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-6 w-6 text-red-500 hover:text-red-700 hover:bg-red-50"
-          onClick={() => deleteOpportunity(opportunity.id)}
-        >
-          <Trash2 className="h-3 w-3" />
-        </Button>
-      </TableCell>
-    </TableRow>
+        {/* Name */}
+        <TableCell className="px-1 py-0.5 overflow-hidden" style={{ width: w('name'), maxWidth: w('name') }}>
+          {isEditing && editingField === 'name' ? (
+            <div className="flex items-center gap-0.5">
+              <Input
+                value={tempValue}
+                onChange={(e) => setTempValue(e.target.value)}
+                className="h-5 text-[10px]"
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') saveEditing()
+                  if (e.key === 'Escape') cancelEditing()
+                }}
+              />
+              <Button size="icon" variant="ghost" className="h-4 w-4 flex-shrink-0" onClick={saveEditing}>
+                <Check className="h-2.5 w-2.5" />
+              </Button>
+              <Button size="icon" variant="ghost" className="h-4 w-4 flex-shrink-0" onClick={cancelEditing}>
+                <X className="h-2.5 w-2.5" />
+              </Button>
+            </div>
+          ) : (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span
+                  className="cursor-pointer hover:text-blue-600 font-medium text-[10px] truncate block"
+                  onClick={() => startEditing('name', opportunity.name)}
+                >
+                  {opportunity.name}
+                </span>
+              </TooltipTrigger>
+              <TooltipContent side="top" className="max-w-xs">
+                <p className="text-xs">{opportunity.name}</p>
+              </TooltipContent>
+            </Tooltip>
+          )}
+        </TableCell>
+
+        {/* SOM */}
+        <TableCell className="px-1 py-0.5" style={{ width: w('som'), maxWidth: w('som') }}>
+          {isEditing && editingField === 'estimated_som' ? (
+            <div className="flex items-center gap-0.5" onClick={(e) => e.stopPropagation()}>
+              <Input
+                type="number"
+                value={tempValue}
+                onChange={(e) => setTempValue(e.target.value)}
+                className="h-5 w-12 text-[10px]"
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') saveEditing()
+                  if (e.key === 'Escape') cancelEditing()
+                }}
+              />
+              <Button size="icon" variant="ghost" className="h-4 w-4" onClick={saveEditing}>
+                <Check className="h-2.5 w-2.5" />
+              </Button>
+            </div>
+          ) : (
+            <span
+              className="cursor-pointer hover:text-blue-600 text-[10px] block"
+              onClick={() => startEditing('estimated_som', opportunity.estimated_som?.toString() || '')}
+            >
+              {opportunity.estimated_som
+                ? `$${(opportunity.estimated_som / 1000).toFixed(0)}k`
+                : <span className="text-gray-400">-</span>}
+            </span>
+          )}
+        </TableCell>
+
+        {/* Status */}
+        <TableCell className="px-1 py-0.5" style={{ width: w('status'), maxWidth: w('status') }}>
+          <StatusSelect
+            value={opportunity.status}
+            onChange={(value) => updateField(opportunity.id, 'status', value)}
+          />
+        </TableCell>
+
+        {/* Indicators */}
+        <IndicatorCell
+          value={opportunity.messaging_indicator || 'red'}
+          onChange={(value) => updateField(opportunity.id, 'messaging_indicator', value)}
+          width={w('m')}
+        />
+        <IndicatorCell
+          value={opportunity.campaign_indicator || 'red'}
+          onChange={(value) => updateField(opportunity.id, 'campaign_indicator', value)}
+          width={w('c')}
+        />
+        <IndicatorCell
+          value={opportunity.pricing_indicator || 'red'}
+          onChange={(value) => updateField(opportunity.id, 'pricing_indicator', value)}
+          width={w('p')}
+        />
+        <IndicatorCell
+          value={opportunity.sales_alignment_indicator || 'red'}
+          onChange={(value) => updateField(opportunity.id, 'sales_alignment_indicator', value)}
+          width={w('s')}
+        />
+
+        {/* Next Steps */}
+        <TableCell className="px-1 py-0.5 overflow-hidden" style={{ width: w('nextSteps'), maxWidth: w('nextSteps') }}>
+          {opportunity.next_steps ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="text-[10px] text-gray-600 truncate block cursor-default">
+                  {opportunity.next_steps}
+                </span>
+              </TooltipTrigger>
+              <TooltipContent side="top" className="max-w-sm">
+                <p className="text-xs whitespace-pre-wrap">{opportunity.next_steps}</p>
+              </TooltipContent>
+            </Tooltip>
+          ) : (
+            <span className="text-gray-300 text-[10px]">-</span>
+          )}
+        </TableCell>
+
+        {/* Demo Links */}
+        <TableCell className="text-center px-0 py-0.5" style={{ width: w('demo'), maxWidth: w('demo') }}>
+          {demoLinksCount > 0 ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="flex items-center justify-center gap-0.5 text-blue-500">
+                  <LinkIcon className="h-3 w-3" />
+                  <span className="text-[9px]">{demoLinksCount}</span>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent side="top" className="max-w-xs">
+                <p className="font-medium text-xs">Demo Links</p>
+                {opportunity.demo_links?.map((link, i) => (
+                  <p key={i} className="text-[10px] text-gray-500 truncate">{link}</p>
+                ))}
+              </TooltipContent>
+            </Tooltip>
+          ) : (
+            <span className="text-gray-300 text-[9px]">-</span>
+          )}
+        </TableCell>
+
+        {/* Attachments */}
+        <TableCell className="text-center px-0 py-0.5" style={{ width: w('files'), maxWidth: w('files') }}>
+          {attachmentsCount > 0 ? (
+            <div className="flex items-center justify-center gap-0.5 text-blue-500">
+              <Paperclip className="h-3 w-3" />
+              <span className="text-[9px]">{attachmentsCount}</span>
+            </div>
+          ) : (
+            <span className="text-gray-300 text-[9px]">-</span>
+          )}
+        </TableCell>
+
+        {/* Target Date */}
+        <TableCell className="px-0 py-0.5" style={{ width: w('target'), maxWidth: w('target') }}>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="ghost" className="h-6 px-1 text-[9px] w-full justify-start">
+                {opportunity.target_date
+                  ? format(new Date(opportunity.target_date), 'MMM d')
+                  : <span className="text-gray-400">-</span>}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0">
+              <Calendar
+                mode="single"
+                selected={opportunity.target_date ? new Date(opportunity.target_date) : undefined}
+                onSelect={(date) =>
+                  updateField(
+                    opportunity.id,
+                    'target_date',
+                    date ? format(date, 'yyyy-MM-dd') : null
+                  )
+                }
+                initialFocus
+              />
+            </PopoverContent>
+          </Popover>
+        </TableCell>
+
+        {/* Delete */}
+        <TableCell className="px-0 py-0.5" style={{ width: 28 }}>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-5 w-5 text-red-500 hover:text-red-700 hover:bg-red-50"
+            onClick={() => deleteOpportunity(opportunity.id)}
+          >
+            <Trash2 className="h-3 w-3" />
+          </Button>
+        </TableCell>
+      </TableRow>
+
+      {/* Expanded row for full details */}
+      {isExpanded && (
+        <TableRow className="bg-blue-50/50 border-t-0">
+          <TableCell colSpan={15} className="py-3 px-4">
+            <div className="grid grid-cols-2 gap-4 text-xs">
+              {opportunity.description && (
+                <div>
+                  <h4 className="font-medium text-gray-700 mb-1 flex items-center gap-1">
+                    <FileText className="h-3 w-3" />
+                    Description
+                  </h4>
+                  <p className="text-gray-600 whitespace-pre-wrap bg-white p-2 rounded border">
+                    {opportunity.description}
+                  </p>
+                </div>
+              )}
+              {opportunity.next_steps && (
+                <div>
+                  <h4 className="font-medium text-gray-700 mb-1 flex items-center gap-1">
+                    <ChevronRight className="h-3 w-3" />
+                    Next Steps
+                  </h4>
+                  <p className="text-gray-600 whitespace-pre-wrap bg-white p-2 rounded border">
+                    {opportunity.next_steps}
+                  </p>
+                </div>
+              )}
+              {opportunity.demo_links && opportunity.demo_links.length > 0 && (
+                <div>
+                  <h4 className="font-medium text-gray-700 mb-1 flex items-center gap-1">
+                    <LinkIcon className="h-3 w-3" />
+                    Demo Links
+                  </h4>
+                  <div className="space-y-1 bg-white p-2 rounded border">
+                    {opportunity.demo_links.map((link, i) => (
+                      <a
+                        key={i}
+                        href={link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:underline block truncate"
+                      >
+                        {link}
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </TableCell>
+        </TableRow>
+      )}
+    </>
   )
 }
 
 function IndicatorCell({
   value,
   onChange,
+  width,
 }: {
   value: IndicatorStatus
   onChange: (value: IndicatorStatus) => void
+  width?: number
 }) {
   const safeValue = value && INDICATOR_CONFIG[value] ? value : 'red'
   const config = INDICATOR_CONFIG[safeValue]
 
   return (
-    <TableCell className="text-center px-1 py-1">
+    <TableCell className="text-center px-0 py-0.5" style={{ width: width || 32, maxWidth: width || 32 }}>
       <Select value={safeValue} onValueChange={onChange}>
-        <SelectTrigger className="w-8 h-6 border hover:border-gray-400 mx-auto px-1 gap-0 cursor-pointer">
-          <span className={cn('w-3 h-3 rounded-full flex-shrink-0', config.bgColor)} />
+        <SelectTrigger className="w-7 h-6 border-0 bg-transparent hover:bg-gray-100 mx-auto px-0 gap-0 cursor-pointer justify-center">
+          <span className={cn('w-3.5 h-3.5 rounded-full flex-shrink-0', config.bgColor)} />
         </SelectTrigger>
         <SelectContent position="popper" sideOffset={4}>
           {Object.entries(INDICATOR_CONFIG).map(([key, cfg]) => (
@@ -613,9 +822,9 @@ function StatusSelect({
 
   return (
     <Select value={isKnownStatus ? normalizedValue : 'planned'} onValueChange={onChange}>
-      <SelectTrigger className="w-full h-6 hover:border-gray-400 cursor-pointer text-xs">
+      <SelectTrigger className="w-full h-6 border-0 bg-transparent hover:bg-gray-100 cursor-pointer text-xs px-1 gap-1">
         <div className="flex items-center gap-1">
-          <span className={cn('w-2 h-2 rounded-full flex-shrink-0', config.bgColor)} />
+          <span className={cn('w-2.5 h-2.5 rounded-full flex-shrink-0', config.bgColor)} />
           <span className="text-[10px] truncate">{displayLabel}</span>
         </div>
       </SelectTrigger>

@@ -1,6 +1,25 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
+// Default column widths for the table
+export const DEFAULT_COLUMN_WIDTHS: Record<string, number> = {
+  expand: 24,
+  phase: 55,
+  company: 70,
+  name: 120,
+  som: 50,
+  status: 85,
+  m: 40,
+  c: 40,
+  p: 40,
+  s: 40,
+  nextSteps: 100,
+  demo: 45,
+  files: 45,
+  target: 55,
+  delete: 28,
+}
+
 interface FilterState {
   // Sidebar state
   sidebarCollapsed: boolean
@@ -13,6 +32,9 @@ interface FilterState {
   companyMode: 'all' | 'select'
   selectedCompanyIds: string[]
 
+  // Table column widths
+  columnWidths: Record<string, number>
+
   // Actions
   toggleSidebar: () => void
   setSidebarCollapsed: (collapsed: boolean) => void
@@ -23,6 +45,8 @@ interface FilterState {
   toggleCompany: (id: string) => void
   setSelectedCompanies: (ids: string[]) => void
   clearFilters: () => void
+  setColumnWidth: (column: string, width: number) => void
+  resetColumnWidths: () => void
 }
 
 export const useFilterStore = create<FilterState>()(
@@ -33,6 +57,7 @@ export const useFilterStore = create<FilterState>()(
       selectedOpportunityIds: [],
       companyMode: 'all',
       selectedCompanyIds: [],
+      columnWidths: { ...DEFAULT_COLUMN_WIDTHS },
 
       toggleSidebar: () => set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
       setSidebarCollapsed: (collapsed) => set({ sidebarCollapsed: collapsed }),
@@ -56,6 +81,10 @@ export const useFilterStore = create<FilterState>()(
         companyMode: 'all',
         selectedCompanyIds: [],
       }),
+      setColumnWidth: (column, width) => set((state) => ({
+        columnWidths: { ...state.columnWidths, [column]: Math.max(20, width) },
+      })),
+      resetColumnWidths: () => set({ columnWidths: { ...DEFAULT_COLUMN_WIDTHS } }),
     }),
     { name: 'hic-tracker-filters' }
   )
