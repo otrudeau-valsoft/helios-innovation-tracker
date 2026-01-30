@@ -24,7 +24,7 @@ import {
 } from '@/components/ui/select'
 import { Calendar } from '@/components/ui/calendar'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { CalendarIcon, Trash2, Plus, X, Link as LinkIcon, Paperclip } from 'lucide-react'
+import { CalendarIcon, Trash2, Plus, X, Link as LinkIcon, Paperclip, ZoomIn } from 'lucide-react'
 import { FileUpload } from '@/components/ui/file-upload'
 import { Separator } from '@/components/ui/separator'
 import type { Attachment } from '@/types/database'
@@ -71,6 +71,7 @@ export function OpportunityModal({
   const [newLink, setNewLink] = useState('')
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [uploading, setUploading] = useState(false)
+  const [previewImage, setPreviewImage] = useState<string | null>(null)
 
   useEffect(() => {
     if (opportunity) {
@@ -434,11 +435,11 @@ export function OpportunityModal({
 
           <Separator className="my-2" />
 
-          {/* Demo Links */}
+          {/* Demos */}
           <div className="grid grid-cols-4 items-start gap-4">
             <Label className="text-right pt-2 flex items-center gap-1">
               <LinkIcon className="h-4 w-4" />
-              Demo Links
+              Demos
             </Label>
             <div className="col-span-3 space-y-2">
               {demoLinks.map((link, idx) => (
@@ -478,12 +479,12 @@ export function OpportunityModal({
             </div>
           </div>
 
-          {/* Attachments - only show when editing */}
+          {/* Files - only show when editing */}
           {isEditing && (
             <div className="grid grid-cols-4 items-start gap-4">
               <Label className="text-right pt-2 flex items-center gap-1">
                 <Paperclip className="h-4 w-4" />
-                Attachments
+                Files
                 {attachments.length > 0 && (
                   <span className="ml-1 bg-blue-100 text-blue-700 text-xs px-1.5 py-0.5 rounded-full">
                     {attachments.length}
@@ -499,21 +500,37 @@ export function OpportunityModal({
                       return (
                         <div
                           key={att.id}
-                          className="flex items-center gap-3 p-2 border rounded-md bg-green-50 border-green-200"
+                          className="flex items-center gap-3 p-2 border rounded-md bg-green-50 border-green-200 group"
                         >
                           {isImage ? (
-                            <img
-                              src={publicUrl}
-                              alt={att.file_name}
-                              className="w-10 h-10 object-cover rounded"
-                            />
+                            <div
+                              className="relative w-10 h-10 cursor-pointer"
+                              onClick={() => setPreviewImage(publicUrl)}
+                            >
+                              <img
+                                src={publicUrl}
+                                alt={att.file_name}
+                                className="w-10 h-10 object-cover rounded"
+                              />
+                              <div className="absolute inset-0 bg-black/0 hover:bg-black/30 rounded flex items-center justify-center transition-colors">
+                                <ZoomIn className="h-4 w-4 text-white opacity-0 group-hover:opacity-100" />
+                              </div>
+                            </div>
                           ) : (
                             <div className="w-10 h-10 bg-gray-100 rounded flex items-center justify-center text-gray-400">
                               <Paperclip className="h-4 w-4" />
                             </div>
                           )}
                           <div className="flex-1 min-w-0">
-                            <span className="text-sm font-medium truncate block">{att.file_name}</span>
+                            <span
+                              className={cn(
+                                "text-sm font-medium truncate block",
+                                isImage && "cursor-pointer hover:text-blue-600"
+                              )}
+                              onClick={() => isImage && setPreviewImage(publicUrl)}
+                            >
+                              {att.file_name}
+                            </span>
                             <span className="text-xs text-green-600">Uploaded</span>
                           </div>
                           <Button
@@ -559,6 +576,27 @@ export function OpportunityModal({
           </div>
         </DialogFooter>
       </DialogContent>
+
+      {/* Full-screen Image Preview */}
+      {previewImage && (
+        <div
+          className="fixed inset-0 z-[100] bg-black/90 flex items-center justify-center p-8"
+          onClick={() => setPreviewImage(null)}
+        >
+          <button
+            className="absolute top-6 right-6 text-white hover:text-gray-300 z-10"
+            onClick={() => setPreviewImage(null)}
+          >
+            <X className="h-10 w-10" />
+          </button>
+          <img
+            src={previewImage}
+            alt="Preview"
+            className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
     </Dialog>
   )
 }

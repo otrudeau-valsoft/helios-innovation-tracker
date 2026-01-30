@@ -169,11 +169,11 @@ export function OpportunityDetailModal({
             </div>
           </div>
 
-          {/* Demo Links */}
+          {/* Demos */}
           <div>
             <h4 className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
               <LinkIcon className="h-4 w-4" />
-              Demo Links
+              Demos
               {demoLinks.length > 0 && (
                 <Badge variant="secondary" className="text-xs">{demoLinks.length}</Badge>
               )}
@@ -194,17 +194,17 @@ export function OpportunityDetailModal({
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-gray-400 italic">No demo links added</p>
+              <p className="text-sm text-gray-400 italic">No demos added</p>
             )}
           </div>
 
           <Separator />
 
-          {/* Attachments */}
+          {/* Files */}
           <div>
             <h4 className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
               <Paperclip className="h-4 w-4" />
-              Attachments
+              Files
               {attachments.length > 0 && (
                 <Badge variant="secondary" className="text-xs">{attachments.length}</Badge>
               )}
@@ -283,7 +283,7 @@ export function OpportunityDetailModal({
                 })}
               </div>
             ) : (
-              <p className="text-sm text-gray-400 italic">No attachments</p>
+              <p className="text-sm text-gray-400 italic">No files</p>
             )}
 
           </div>

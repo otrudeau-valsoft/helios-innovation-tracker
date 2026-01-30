@@ -104,6 +104,7 @@ export function TableView({ opportunities, companies, onRefresh }: TableViewProp
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editingField, setEditingField] = useState<string | null>(null)
   const [expandedRowId, setExpandedRowId] = useState<string | null>(null)
+  const [previewImage, setPreviewImage] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
   const { columnWidths, setColumnWidth, resetColumnWidths } = useFilterStore()
   const resizingRef = useRef<{ column: string; startX: number; startWidth: number } | null>(null)
@@ -381,12 +382,35 @@ export function TableView({ opportunities, companies, onRefresh }: TableViewProp
                 isExpanded={expandedRowId === opp.id}
                 onToggleExpand={() => setExpandedRowId(expandedRowId === opp.id ? null : opp.id)}
                 columnWidths={columnWidths}
+                supabase={supabase}
+                onPreviewImage={setPreviewImage}
               />
             ))
           )}
         </TableBody>
       </Table>
     </div>
+
+    {/* Full-screen Image Preview */}
+    {previewImage && (
+      <div
+        className="fixed inset-0 z-[100] bg-black/90 flex items-center justify-center p-8"
+        onClick={() => setPreviewImage(null)}
+      >
+        <button
+          className="absolute top-6 right-6 text-white hover:text-gray-300 z-10"
+          onClick={() => setPreviewImage(null)}
+        >
+          <X className="h-10 w-10" />
+        </button>
+        <img
+          src={previewImage}
+          alt="Preview"
+          className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg shadow-2xl"
+          onClick={(e) => e.stopPropagation()}
+        />
+      </div>
+    )}
     </TooltipProvider>
   )
 }
@@ -404,6 +428,8 @@ interface OpportunityRowProps {
   isExpanded: boolean
   onToggleExpand: () => void
   columnWidths: Record<string, number>
+  supabase: ReturnType<typeof createClient>
+  onPreviewImage: (url: string) => void
 }
 
 function OpportunityRow({
@@ -419,6 +445,8 @@ function OpportunityRow({
   isExpanded,
   onToggleExpand,
   columnWidths,
+  supabase,
+  onPreviewImage,
 }: OpportunityRowProps) {
   const isEditing = editingId === opportunity.id
   const [tempValue, setTempValue] = useState<string>('')
@@ -662,7 +690,7 @@ function OpportunityRow({
             <PopoverContent className="w-64 p-2" side="bottom" align="center">
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="font-medium text-xs">Demo Links</span>
+                  <span className="font-medium text-xs">Demos</span>
                   <Button
                     variant="ghost"
                     size="sm"
@@ -714,7 +742,7 @@ function OpportunityRow({
           </Popover>
         </TableCell>
 
-        {/* Attachments - Clickable */}
+        {/* Attachments - Clickable with image preview */}
         <TableCell className="text-center px-0 py-0.5" style={{ width: w('files'), maxWidth: w('files') }}>
           <Popover>
             <PopoverTrigger asChild>
@@ -729,33 +757,56 @@ function OpportunityRow({
                 {attachmentsCount > 0 && <span className="ml-0.5">{attachmentsCount}</span>}
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-64 p-2" side="bottom" align="center">
+            <PopoverContent className="w-72 p-2" side="bottom" align="center">
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="font-medium text-xs">Attachments</span>
-                  <span className="text-[10px] text-gray-400">(Upload via edit modal)</span>
+                  <span className="font-medium text-xs">Files</span>
+                  <span className="text-[10px] text-gray-400">(Upload via edit)</span>
                 </div>
                 {attachmentsCount > 0 ? (
-                  <div className="space-y-1 max-h-32 overflow-y-auto">
-                    {opportunity.attachments?.map((att) => (
-                      <div key={att.id} className="flex items-center gap-1 group">
-                        <FileText className="h-3 w-3 text-gray-400 flex-shrink-0" />
-                        <span className="text-[10px] text-gray-600 flex-1 truncate">
-                          {att.file_name}
-                        </span>
-                        <a
-                          href={att.file_path}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-blue-500 hover:text-blue-700"
-                        >
-                          <Download className="h-3 w-3" />
-                        </a>
-                      </div>
-                    ))}
+                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                    {opportunity.attachments?.map((att) => {
+                      const isImage = att.file_type?.startsWith('image/')
+                      const publicUrl = supabase.storage.from('Attachments').getPublicUrl(att.file_path).data.publicUrl
+                      return (
+                        <div key={att.id} className="flex items-center gap-2 group p-1 rounded hover:bg-gray-50">
+                          {isImage ? (
+                            <img
+                              src={publicUrl}
+                              alt={att.file_name}
+                              className="w-10 h-10 object-cover rounded cursor-pointer hover:opacity-80"
+                              onClick={() => onPreviewImage(publicUrl)}
+                            />
+                          ) : (
+                            <div className="w-10 h-10 bg-gray-100 rounded flex items-center justify-center text-gray-400">
+                              <FileText className="h-4 w-4" />
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <span
+                              className={cn(
+                                "text-[10px] text-gray-600 truncate block",
+                                isImage && "cursor-pointer hover:text-blue-600"
+                              )}
+                              onClick={() => isImage && onPreviewImage(publicUrl)}
+                            >
+                              {att.file_name}
+                            </span>
+                          </div>
+                          <a
+                            href={publicUrl}
+                            download={att.file_name}
+                            className="text-blue-500 hover:text-blue-700 p-1"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <Download className="h-3 w-3" />
+                          </a>
+                        </div>
+                      )
+                    })}
                   </div>
                 ) : (
-                  <p className="text-[10px] text-gray-400 text-center py-2">No attachments yet</p>
+                  <p className="text-[10px] text-gray-400 text-center py-2">No files yet</p>
                 )}
               </div>
             </PopoverContent>
