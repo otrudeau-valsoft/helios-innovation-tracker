@@ -26,7 +26,15 @@ export function useOpportunities() {
         .order('name')
 
       if (companiesError) throw companiesError
-      setCompanies(companiesData || [])
+
+      // Ensure Hyper-Reach is always available as a company
+      let finalCompanies = (companiesData || []) as Company[]
+      if (!finalCompanies.some(c => c.name === 'Hyper-Reach')) {
+        await supabase.from('companies').insert({ name: 'Hyper-Reach', slug: 'hyper-reach' } as never)
+        const { data: refreshed } = await supabase.from('companies').select('*').order('name')
+        if (refreshed) finalCompanies = refreshed as Company[]
+      }
+      setCompanies(finalCompanies)
 
       // Build opportunities query - join with companies and attachments tables
       let query = supabase

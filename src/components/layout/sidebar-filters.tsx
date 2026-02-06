@@ -59,7 +59,15 @@ export function SidebarFilters() {
         supabase.from('opportunities').select('*, companies(*)').order('name'),
       ])
 
-      if (companiesRes.data) setCompanies(companiesRes.data)
+      // Ensure Hyper-Reach is always available as a company
+      let companiesData = (companiesRes.data || []) as Company[]
+      if (!companiesData.some(c => c.name === 'Hyper-Reach')) {
+        await supabase.from('companies').insert({ name: 'Hyper-Reach', slug: 'hyper-reach' } as never)
+        const { data: refreshed } = await supabase.from('companies').select('*').order('name')
+        if (refreshed) companiesData = refreshed as Company[]
+      }
+      setCompanies(companiesData)
+
       if (opportunitiesRes.data) setOpportunities(opportunitiesRes.data as OpportunityWithCompany[])
     }
 
